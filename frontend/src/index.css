@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: #f4f4f5;
+  background-image:
+    radial-gradient(ellipse 100% 60% at 100% 0%, rgba(20, 184, 166, 0.07), transparent 45%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, rgba(15, 118, 110, 0.05), transparent 50%);
+  background-attachment: fixed;
+  color: #18181b;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+@layer components {
+  .surface {
+    @apply rounded-xl border border-zinc-200/90 bg-white shadow-sm;
+  }
+  .surface-soft {
+    @apply rounded-xl border border-zinc-200/80 bg-white/90 backdrop-blur-md;
+  }
+  .pane {
+    @apply rounded-xl border border-zinc-200/85 bg-white shadow-[0_1px_2px_rgba(24,24,27,0.04),0_8px_24px_-8px_rgba(24,24,27,0.08)];
+  }
+  /** Page intro — workbench pages */
+  .app-hero {
+    @apply relative overflow-hidden rounded-2xl border border-zinc-200/90 bg-gradient-to-br from-white via-zinc-50/80 to-teal-50/40 p-6 shadow-sm sm:rounded-2xl sm:p-8;
+  }
+  .app-hero::after {
+    content: "";
+    @apply pointer-events-none absolute -right-12 -top-20 h-48 w-48 rounded-full bg-teal-400/15 blur-3xl;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all;
+  }
+  .btn-primary {
+    @apply btn text-white bg-brand-grad shadow-pop hover:shadow-lg hover:scale-[1.01] active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply btn bg-white hover:bg-ink-50 border border-ink-200 text-ink-800;
+  }
+  .btn-soft {
+    @apply btn bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-100;
+  }
+  .btn-danger {
+    @apply btn bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600;
+  }
+  .input {
+    @apply w-full bg-white border border-ink-200 rounded-xl px-3.5 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none focus:ring-4 focus:ring-brand-500/15 focus:border-brand-400 transition;
+  }
+  .label {
+    @apply text-[11px] uppercase tracking-[0.14em] text-ink-500 font-semibold;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium;
+  }
+  .ring-soft {
+    @apply ring-1 ring-ink-200/80;
+  }
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-brand-grad;
+  }
+  /** Document QC workspace — `min-h-*` prevents flex sibling (gallery) from collapsing this to 0 height */
+  .qc-stage-surface {
+    @apply flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-teal-200/70 bg-gradient-to-b from-white via-teal-50/20 to-white shadow-sm;
+  }
+  .qc-stage-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto overscroll-contain;
+  }
+  .qc-output-pre {
+    @apply text-sm whitespace-pre-wrap rounded-xl border border-ink-200/90 bg-ink-50/90 p-3 overflow-auto;
+    min-height: 10rem;
+    max-height: min(52vh, 36rem);
+  }
+}
+
+.flow-line {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(20, 184, 166, 0.55),
+    rgba(5, 150, 105, 0.5),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.5s linear infinite;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.2);
+}
+
+/* Subtle grain texture overlay for that "innovative" feel */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}

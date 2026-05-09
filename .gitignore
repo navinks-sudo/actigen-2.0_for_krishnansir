@@ -1,0 +1,43 @@
+backend/.venv/
+backend/app/storage/*
+!backend/app/storage/.gitkeep
+backend/app/visionmax.db
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+.DS_Store
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+!env.example
+backend/.env
+frontend/.env
+*.pem
+*.key
+secrets.json
+
+# Tessdata (large binary models — hydrate from upstream instead)
+backend/tessdata/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build / cache
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+frontend/tsconfig.tsbuildinfo
+frontend/.eslintcache
+
+# OS / misc
+Thumbs.db
+desktop.ini
+*.log
