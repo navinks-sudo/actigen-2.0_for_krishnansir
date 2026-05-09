@@ -24,9 +24,10 @@ secrets.json
 # Tessdata (large binary models — hydrate from upstream instead)
 backend/tessdata/
 
-# IDE
+# IDE / assistant tooling (local-only state, never push)
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 
