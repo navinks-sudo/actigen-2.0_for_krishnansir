@@ -30,6 +30,36 @@ function avgNums(vals: (number | null | undefined)[]): number | null {
   return n.reduce((a, b) => a + b, 0) / n.length;
 }
 
+function verdictLabel(v: string): string {
+  if (v.startsWith("escalation:")) return v.slice("escalation:".length);
+  return v.replaceAll("_", " ");
+}
+
+function HistogramStrip({ before, after }: { before: number[]; after: number[] }) {
+  const max = Math.max(...before, ...after, 0.0001);
+  return (
+    <div className="flex items-end gap-px h-6 w-32" aria-label="Grayscale histogram before/after">
+      {before.map((b, i) => {
+        const a = after[i] ?? 0;
+        return (
+          <div key={i} className="relative flex-1 h-full">
+            <div
+              className="absolute inset-x-0 bottom-0 bg-ink-400/40"
+              style={{ height: `${(b / max) * 100}%` }}
+              title={`bin ${i}: before ${(b * 100).toFixed(1)}%`}
+            />
+            <div
+              className="absolute inset-x-0 bottom-0 bg-pink-500/70"
+              style={{ height: `${(a / max) * 100}%` }}
+              title={`bin ${i}: after ${(a * 100).toFixed(1)}%`}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function avgPageQsMetrics(pages: DocumentPageT[]): PageQsMetricsT | null {
   const rows = pages.map((p) => p.qs_metrics).filter((x): x is PageQsMetricsT => Boolean(x));
   if (!rows.length) return null;
@@ -860,7 +890,7 @@ export default function QCEnhancement({
         <div className="surface p-4 md:p-5 border border-indigo-100 ring-1 ring-indigo-50/80 overflow-hidden flex flex-col max-h-[min(56vh,32rem)]">
           <h4 className="text-sm font-bold text-ink-900 mb-3 shrink-0">Per-page quality & inputs</h4>
           <div className="overflow-auto min-h-0 flex-1 -mx-1 px-1">
-          <table className="w-full text-sm min-w-[960px]">
+          <table className="w-full text-sm min-w-[1140px]">
             <thead>
               <tr className="text-left text-ink-500 border-b border-ink-200">
                 <th className="py-2 pr-3">Page</th>
@@ -869,7 +899,8 @@ export default function QCEnhancement({
                 <th className="py-2 pr-3">QS in (init)</th>
                 <th className="py-2 pr-3">Raster (init)</th>
                 <th className="py-2 pr-3">QS in (post)</th>
-                <th className="py-2">Raster (post)</th>
+                <th className="py-2 pr-3">Raster (post)</th>
+                <th className="py-2">Engine</th>
               </tr>
             </thead>
             <tbody>
@@ -908,13 +939,35 @@ export default function QCEnhancement({
                       "—"
                     )}
                   </td>
-                  <td className="py-2.5 text-xs text-pink-800/90">
+                  <td className="py-2.5 pr-3 text-xs text-pink-800/90">
                     {p.post_image_params ? (
                       <>
                         {p.post_image_params.width_px}×{p.post_image_params.height_px}px · μ
                         {p.post_image_params.mean_gray.toFixed(0)} · Lap{" "}
                         {p.post_image_params.laplacian_variance.toFixed(0)}
                       </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="py-2.5 text-xs text-ink-700">
+                    {p.enhancement_report ? (
+                      <div className="space-y-1">
+                        <div className="font-mono font-semibold text-indigo-700">
+                          {verdictLabel(p.enhancement_report.verdict)}
+                        </div>
+                        <div className="text-[11px] text-ink-500 tabular-nums">
+                          Δpaper {p.enhancement_report.paper_lift >= 0 ? "+" : ""}
+                          {p.enhancement_report.paper_lift.toFixed(1)} · Δink{" "}
+                          {p.enhancement_report.ink_deepen >= 0 ? "+" : ""}
+                          {p.enhancement_report.ink_deepen.toFixed(1)} ·{" "}
+                          {(p.enhancement_report.pct_pixels_changed * 100).toFixed(1)}% px
+                        </div>
+                        <HistogramStrip
+                          before={p.enhancement_report.hist_before}
+                          after={p.enhancement_report.hist_after}
+                        />
+                      </div>
                     ) : (
                       "—"
                     )}

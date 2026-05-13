@@ -47,17 +47,17 @@ def stage_config_public() -> dict[str, Any]:
         "doc_class": {
             "title": "Document classification",
             "sop_target_default": None,
-            "notes": "LLM when OPENAI_API_KEY set; else TF-IDF. Top class + score bars.",
+            "notes": "Gemini when GEMINI_API_KEY set; else TF-IDF. Top class + score bars.",
         },
         "index_genius": {
             "title": "Index Genius",
             "sop_target_default": None,
-            "notes": "Regex extraction plus optional LLM metatags with same API key.",
+            "notes": "Per-class strict schema (Master Data dropdowns). Gemini fills fields; regex fallback.",
         },
         "abstractor": {
             "title": "Abstractor",
             "sop_target_default": None,
-            "notes": "Per-page summarization when OCR exists; LLM when configured else LSA.",
+            "notes": "Gemini 3-sentence summary per page when OCR exists; LSA fallback without a key.",
         },
         "lingua": {
             "title": "Lingua AI",

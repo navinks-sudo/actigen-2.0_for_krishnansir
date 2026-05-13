@@ -11,22 +11,18 @@ from typing import Any, Optional
 
 from dateutil import parser as dateparser
 
-from . import gemini_client, llm_client
+from . import gemini_client
 
 
 def _llm_chat_json(system: str, user: str, *, max_tokens: int = 900) -> dict[str, Any] | None:
-    """Try Gemini first, then OpenAI. Returns None if neither is configured / both fail."""
-    if gemini_client.is_configured():
-        out = gemini_client.chat_json(system, user, max_tokens=max_tokens)
-        if out is not None:
-            return out
-    if llm_client.is_configured():
-        return llm_client.chat_json(system, user, max_tokens=max_tokens)
-    return None
+    """Gemini-only JSON call. Returns None when GEMINI_API_KEY is not set or the call fails."""
+    if not gemini_client.is_configured():
+        return None
+    return gemini_client.chat_json(system, user, max_tokens=max_tokens)
 
 
 def _any_llm_configured() -> bool:
-    return gemini_client.is_configured() or llm_client.is_configured()
+    return gemini_client.is_configured()
 
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 PHONE_RE = re.compile(r"(?:\+?\d{1,3}[\s.-]?)?\(?\d{3,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}")
@@ -87,42 +83,46 @@ def _word_to_int(token: str) -> int | None:
     return None
 
 
-# Per-class form schema. Each field: name, type, options? (for select / date / text / year).
+# Per-class form schema — strictly matches the operator-supplied template:
+#   * "select" enforces a Master Data dropdown — LLM is forced to pick one of the options or null.
+#   * "date" coerces to ISO YYYY-MM-DD.
+#   * "year" coerces to a 4-digit year.
+#   * "text" is free-form (titles, presenter names, subjects).
 CLASS_INDEX_SCHEMA: dict[str, list[dict[str, Any]]] = {
     "Gazette": [
-        {"name": "Type", "type": "text", "options": ["General", "Extra Ordinary", "Zoram Hriattima"]},
+        {"name": "Type", "type": "select", "options": ["General", "Extra Ordinary", "Zoram Hriattima"]},
         {"name": "Gazette Vol", "type": "text"},
         {"name": "Gazette No", "type": "text"},
         {"name": "Date", "type": "date"},
     ],
     "Proceedings": [
-        {"name": "Assembly", "type": "text", "options": ["1", "2", "3"]},
-        {"name": "Session", "type": "text", "options": ["Session 1", "Session 2", "Session 3"]},
+        {"name": "Assembly", "type": "select", "options": ["1", "2", "3"]},
+        {"name": "Session", "type": "select", "options": ["Session 1", "Session 2", "Session 3"]},
         {"name": "Date", "type": "date"},
-        {"name": "Language", "type": "text", "options": ["English", "Hindi"]},
+        {"name": "Language", "type": "select", "options": ["English", "Hindi"]},
     ],
     "Budget Speech": [
         {"name": "Presenter", "type": "text"},
         {"name": "Date", "type": "date"},
-        {"name": "Language", "type": "text", "options": ["English", "Hindi"]},
+        {"name": "Language", "type": "select", "options": ["English", "Hindi"]},
     ],
     "Bulletin": [
-        {"name": "Assembly", "type": "text", "options": ["1", "2", "3"]},
-        {"name": "Session", "type": "text", "options": ["Session 1", "Session 2", "Session 3"]},
-        {"name": "Bulletin Parts", "type": "text", "options": ["Bulletin Part I", "Bulletin Part II", "Bulletin Part III"]},
+        {"name": "Assembly", "type": "select", "options": ["1", "2", "3"]},
+        {"name": "Session", "type": "select", "options": ["Session 1", "Session 2", "Session 3"]},
+        {"name": "Bulletin Parts", "type": "select", "options": ["Bulletin Part I", "Bulletin Part II", "Bulletin Part III"]},
     ],
     "Calendar": [
-        {"name": "Assembly", "type": "text", "options": ["1", "2", "3"]},
-        {"name": "Session", "type": "text", "options": ["Session 1", "Session 2", "Session 3"]},
+        {"name": "Assembly", "type": "select", "options": ["1", "2", "3"]},
+        {"name": "Session", "type": "select", "options": ["Session 1", "Session 2", "Session 3"]},
     ],
     "List Of Business": [
-        {"name": "Assembly", "type": "text", "options": ["1", "2", "3"]},
-        {"name": "Session", "type": "text", "options": ["Session 1", "Session 2", "Session 3"]},
+        {"name": "Assembly", "type": "select", "options": ["1", "2", "3"]},
+        {"name": "Session", "type": "select", "options": ["Session 1", "Session 2", "Session 3"]},
         {"name": "Date", "type": "date"},
     ],
     "List Of Questions": [
-        {"name": "Assembly", "type": "text", "options": ["1", "2", "3"]},
-        {"name": "Session", "type": "text", "options": ["Session 1", "Session 2", "Session 3"]},
+        {"name": "Assembly", "type": "select", "options": ["1", "2", "3"]},
+        {"name": "Session", "type": "select", "options": ["Session 1", "Session 2", "Session 3"]},
         {"name": "Date", "type": "date"},
     ],
     "Government Bill": [
@@ -130,8 +130,8 @@ CLASS_INDEX_SCHEMA: dict[str, list[dict[str, Any]]] = {
         {"name": "Year", "type": "year"},
     ],
     "Governor Speech": [
-        {"name": "Assembly", "type": "text", "options": ["1", "2", "3"]},
-        {"name": "Session", "type": "text", "options": ["Session 1", "Session 2", "Session 3"]},
+        {"name": "Assembly", "type": "select", "options": ["1", "2", "3"]},
+        {"name": "Session", "type": "select", "options": ["Session 1", "Session 2", "Session 3"]},
         {"name": "Date", "type": "date"},
     ],
     "Election": [
@@ -139,9 +139,9 @@ CLASS_INDEX_SCHEMA: dict[str, list[dict[str, Any]]] = {
     ],
     "Resolutions": [
         {"name": "Subject", "type": "text"},
-        {"name": "Type Beat", "type": "text", "options": ["Private", "Government"]},
+        {"name": "Type Beat", "type": "select", "options": ["Private", "Government"]},
         {"name": "Year", "type": "year"},
-        {"name": "Assembly", "type": "text", "options": ["1", "2", "3"]},
+        {"name": "Assembly", "type": "select", "options": ["1", "2", "3"]},
         {"name": "Member Name", "type": "text"},
         {"name": "Date", "type": "date"},
     ],
@@ -281,7 +281,7 @@ def _llm_class_fields(text: str, doc_class: str, schema: list[dict[str, Any]]) -
         " * Person / title strings: copy as written; trim surrounding whitespace."
     )
     user = f"OCR text (English when available; original script otherwise):\n\n{text[:16000]}"
-    data = llm_client.chat_json(system, user, max_tokens=600)
+    data = _llm_chat_json(system, user, max_tokens=600)
     if not data or not isinstance(data, dict):
         return None
 

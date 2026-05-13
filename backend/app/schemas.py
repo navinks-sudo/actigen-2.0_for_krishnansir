@@ -89,6 +89,7 @@ class DocumentPageOut(BaseModel):
     page_translation: Optional[str] = None
     page_doc_class: Optional[str] = None
     page_doc_class_scores: Optional[Any] = None
+    enhancement_report: Optional[dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -183,6 +184,7 @@ def _document_page_out(row: Any) -> DocumentPageOut:
         page_translation=getattr(row, "page_translation", None),
         page_doc_class=getattr(row, "page_doc_class", None),
         page_doc_class_scores=getattr(row, "page_doc_class_scores", None),
+        enhancement_report=getattr(row, "enhancement_report", None),
     )
 
 

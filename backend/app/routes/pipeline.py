@@ -201,6 +201,8 @@ def run_enhancement(doc_id: int, db: Session = Depends(get_db), user: User = Dep
                 pg.post_qs = round(float(compute_qs_post(str(out_path))["qs"]), 2)
                 src_img = _resolve_storage_file(page.image_path) or page.image_path
                 pg.initial_qs = round(float(compute_qs(str(src_img))["qs"]), 2)
+                if last_result and isinstance(last_result.get("report"), dict):
+                    pg.enhancement_report = last_result["report"]
                 # Bump the document's updated_at so the frontend's cacheVersion changes and the
                 # Enhanced raster URL re-fetches with the freshly written file.
                 doc_row = db.query(Document).filter(Document.id == doc_id).first()
@@ -220,6 +222,7 @@ def run_enhancement(doc_id: int, db: Session = Depends(get_db), user: User = Dep
                     "post_qs": pg.post_qs,
                     "initial_qs": pg.initial_qs,
                     "updated_at": (doc_row.updated_at.isoformat() if doc_row and doc_row.updated_at else None),
+                    "enhancement_report": pg.enhancement_report,
                 }
                 yield json.dumps(page_done_payload, default=str) + "\n"
 
@@ -820,7 +823,7 @@ def run_abstract(doc_id: int, db: Session = Depends(get_db), user: User = Depend
         page_text_blocks: list[str] = []
         for pg in pages_sorted:
             src = _page_ocr_text(doc, pg)
-            summ = abstractor.summarize(src, sentences=6) if src.strip() else ""
+            summ = abstractor.summarize(src, sentences=3) if src.strip() else ""
             pg.page_abstract = summ
             pg.corrected_page_abstract = summ
             summaries.append((pg.page_index, summ))
@@ -833,7 +836,7 @@ def run_abstract(doc_id: int, db: Session = Depends(get_db), user: User = Depend
         # Document-wide overall summary across all pages — separate from per-page blocks.
         full_doc_text = "\n\n".join(page_text_blocks)
         if full_doc_text.strip():
-            overall = abstractor.summarize(full_doc_text, sentences=10)
+            overall = abstractor.summarize(full_doc_text, sentences=3)
             doc.overall_abstract = overall
             doc.corrected_overall_abstract = overall
         else:
@@ -842,7 +845,7 @@ def run_abstract(doc_id: int, db: Session = Depends(get_db), user: User = Depend
         payload = {"abstract": joined, "mode": "per_page", "overall": doc.overall_abstract or ""}
     else:
         src_text = doc.corrected_ocr or doc.raw_ocr or ""
-        summary = abstractor.summarize(src_text, sentences=8)
+        summary = abstractor.summarize(src_text, sentences=3)
         doc.abstract = summary
         doc.corrected_abstract = summary
         doc.abstract_cer = 0.0

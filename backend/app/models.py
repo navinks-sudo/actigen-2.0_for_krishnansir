@@ -75,6 +75,8 @@ class DocumentPage(Base):
     initial_qs = Column(Float, nullable=True)
     enhanced_path = Column(String, nullable=True)
     post_qs = Column(Float, nullable=True)
+    # Operator-facing diff report: verdict, paper_lift, ink_deepen, pct_pixels_changed, histograms.
+    enhancement_report = Column(JSON, nullable=True)
     # Per-page Text IQ / Abstractor / Lingua (multi-page PDFs)
     ocr_text = Column(Text, nullable=True)
     corrected_ocr_text = Column(Text, nullable=True)

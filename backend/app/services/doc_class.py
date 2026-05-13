@@ -8,24 +8,20 @@ from typing import Any, Optional
 
 import numpy as np
 
-from . import gemini_client, llm_client
+from . import gemini_client
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
 def _llm_chat_json(system: str, user: str, *, max_tokens: int = 800):
-    """Try Gemini first, then OpenAI. Returns None if neither is configured / both fail."""
-    if gemini_client.is_configured():
-        out = gemini_client.chat_json(system, user, max_tokens=max_tokens)
-        if out is not None:
-            return out
-    if llm_client.is_configured():
-        return llm_client.chat_json(system, user, max_tokens=max_tokens)
-    return None
+    """Gemini-only JSON call. Returns None when GEMINI_API_KEY is not set or the call fails."""
+    if not gemini_client.is_configured():
+        return None
+    return gemini_client.chat_json(system, user, max_tokens=max_tokens)
 
 
 def _any_llm_configured() -> bool:
-    return gemini_client.is_configured() or llm_client.is_configured()
+    return gemini_client.is_configured()
 
 # Mizoram Legislative Assembly document taxonomy. Index Genius has a strict per-class form schema
 # matching this list (see services/index_genius.py: CLASS_INDEX_SCHEMA).

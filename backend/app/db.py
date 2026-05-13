@@ -44,6 +44,8 @@ def migrate_sqlite_schema() -> None:
                 conn.execute(text("ALTER TABLE document_pages ADD COLUMN corrected_ocr_text_english TEXT"))
             if "ocr_boxes" not in page_cols:
                 conn.execute(text("ALTER TABLE document_pages ADD COLUMN ocr_boxes JSON"))
+            if "enhancement_report" not in page_cols:
+                conn.execute(text("ALTER TABLE document_pages ADD COLUMN enhancement_report JSON"))
         if "documents" in tables:
             doc_cols = {c["name"] for c in insp.get_columns("documents")}
             if "overall_abstract" not in doc_cols:

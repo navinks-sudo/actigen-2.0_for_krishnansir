@@ -72,6 +72,17 @@ export interface DocumentPageT {
   page_translation?: string | null;
   page_doc_class?: string | null;
   page_doc_class_scores?: Record<string, number> | null;
+  enhancement_report?: EnhancementReportT | null;
+}
+
+export interface EnhancementReportT {
+  verdict: string;
+  pct_pixels_changed: number;
+  paper_lift: number;
+  ink_deepen: number;
+  mean_shift: number;
+  hist_before: number[];
+  hist_after: number[];
 }
 
 export interface AbstractPagePatchT {

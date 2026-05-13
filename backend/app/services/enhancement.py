@@ -41,11 +41,85 @@ def _high_key_normalize(img_bgr: np.ndarray) -> np.ndarray:
 
 
 def _maybe_recover_washed(img_bgr: np.ndarray) -> np.ndarray:
-    """Apply high-key recovery when global mean indicates a washed scan."""
+    """Apply high-key recovery only on truly washed captures.
+
+    Clean printed pages have high mean *and* high std (white paper + dark ink); washed
+    captures are high mean *and* low std (everything blown toward a single bright tone).
+    Gating on std prevents gamma-darkening pristine scans into a grey-paper look.
+    """
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    if float(np.mean(gray)) < 218.0:
+    if float(np.mean(gray)) < 218.0 or float(np.std(gray)) > 55.0:
         return img_bgr
     return _high_key_normalize(img_bgr)
+
+
+def _grayscale(img_bgr: np.ndarray) -> np.ndarray:
+    return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+
+def _histogram_bins(gray: np.ndarray, bins: int = 16) -> list[float]:
+    """16-bin normalised histogram of a grayscale image — small enough to embed in JSON / render inline."""
+    hist, _ = np.histogram(gray, bins=bins, range=(0, 256))
+    total = float(hist.sum()) or 1.0
+    return [round(float(c) / total, 6) for c in hist]
+
+
+def _enhancement_report(orig_bgr: np.ndarray, final_bgr: np.ndarray, verdict: str) -> dict[str, Any]:
+    """Per-page operator-facing diff: what the enhancement actually changed.
+
+    Lets QC verify the engine ran without having to eyeball pixel changes.
+    """
+    g0 = _grayscale(orig_bgr).astype(np.float32)
+    g1 = _grayscale(final_bgr).astype(np.float32)
+    if g0.shape != g1.shape:
+        g1 = cv2.resize(g1, (g0.shape[1], g0.shape[0]), interpolation=cv2.INTER_AREA)
+    diff = g1 - g0
+    paper_mask = g0 >= 230.0
+    ink_mask = g0 < 100.0
+    paper_lift = float(np.mean(diff[paper_mask])) if paper_mask.any() else 0.0
+    ink_deepen = float(np.mean(diff[ink_mask])) if ink_mask.any() else 0.0
+    pct_changed = float(np.mean(np.abs(diff) >= 1.0))
+    mean_shift = float(np.mean(diff))
+    return {
+        "verdict": verdict,
+        "pct_pixels_changed": round(pct_changed, 4),
+        "paper_lift": round(paper_lift, 2),
+        "ink_deepen": round(ink_deepen, 2),
+        "mean_shift": round(mean_shift, 2),
+        "hist_before": _histogram_bins(_grayscale(orig_bgr)),
+        "hist_after": _histogram_bins(_grayscale(final_bgr)),
+    }
+
+
+def _is_clean_document(img_bgr: np.ndarray) -> bool:
+    """Already-clean printed page: dominant white paper, real ink pixels, low noise floor.
+
+    Used to short-circuit the iterative loop on inputs that don't need enhancement —
+    iterative CLAHE / NLMeans on these adds visible halos and is gamed by the QS scorer.
+    """
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    paper_frac = float(np.mean(gray > 230))
+    ink_frac = float(np.mean(gray < 100))
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    noise = float(np.std(gray.astype(np.float32) - blurred.astype(np.float32)))
+    return paper_frac > 0.55 and ink_frac > 0.003 and noise < 12.0
+
+
+def _clean_doc_polish(img_bgr: np.ndarray) -> np.ndarray:
+    """Tone-curve only polish for clean printed pages.
+
+    Snaps near-white paper to pure 255 and gently deepens the dark band. Leaves the
+    anti-aliasing midtones untouched so there is no ringing / halo. The histogram
+    becomes more bimodal, which raises σ (contrast) and Laplacian variance (sharpness)
+    honestly — no synthetic gradients.
+    """
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    f = gray.astype(np.float32)
+    f = np.where(f >= 235.0, 255.0, f)
+    dark = f < 150.0
+    f[dark] = np.power(f[dark] / 150.0, 1.18) * 150.0
+    out = np.clip(f, 0, 255).astype(np.uint8)
+    return cv2.cvtColor(out, cv2.COLOR_GRAY2BGR)
 
 
 def _detail_enhance_bgr(img: np.ndarray, amount: float = 0.85) -> np.ndarray:
@@ -191,8 +265,13 @@ def enhance_image_stream(
     if max_passes is None:
         max_passes = ENHANCEMENT_MAX_PASSES
 
+    # Keep an untouched copy for the diff report; ``img`` may be tone-mapped below.
+    original_disk = img.copy()
+
     # Modern preprocessing for severely washed captures — improves QS headroom before iterative passes.
-    img = _maybe_recover_washed(img)
+    img_pre = _maybe_recover_washed(img)
+    washed_recovered = not np.array_equal(img_pre, img)
+    img = img_pre
 
     # Two scales are tracked here:
     #   * Initial QS (strict) — what the operator sees as the upload's "real" quality. Stored in DB.
@@ -215,6 +294,9 @@ def enhance_image_stream(
     best_metrics = baseline_lenient
     best_qs = qs_start
     history: list[dict] = [{"pass": 0, "qs": best_qs, "best_qs": best_qs}]
+    verdict = "no_change"
+    if washed_recovered:
+        verdict = "washed_recovery"
 
     yield {
         "phase": "start",
@@ -225,6 +307,47 @@ def enhance_image_stream(
         "min_pass_improvement": ENHANCEMENT_MIN_PASS_IMPROVEMENT,
         "stall_window": ENHANCEMENT_STALL_WINDOW,
     }
+
+    # Already-clean printed page: short-circuit with a tone-only polish. Iterative CLAHE /
+    # NLMeans on these inputs creates visible halos and gets gamed by the QS scorer.
+    if _is_clean_document(img):
+        polished = _clean_doc_polish(img)
+        pol_metrics = compute_qs_post_bgr(polished)
+        pol_qs = float(pol_metrics["qs"])
+        if pol_qs >= best_qs:
+            best = polished
+            best_qs = pol_qs
+            best_metrics = pol_metrics
+            verdict = "clean_doc_polish"
+        history.append({"pass": 1, "qs": pol_qs, "best_qs": best_qs})
+        yield {
+            "phase": "clean_doc",
+            "best_qs": round(best_qs, 2),
+            "candidate_qs": round(pol_qs, 2),
+            "target_qs": float(target_qs),
+            "met_target": bool(best_qs >= target_qs),
+            "verdict": verdict,
+        }
+        yield {"phase": "write", "message": "Saving enhanced image…"}
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(output_path, best)
+        final = compute_qs_post(output_path)
+        if float(final["qs"]) < qs_orig_lenient:
+            shutil.copyfile(input_path, output_path)
+            final = compute_qs_post(output_path)
+            verdict = "rolled_back_to_original"
+        final_disk = cv2.imread(output_path)
+        report = _enhancement_report(original_disk, final_disk if final_disk is not None else best, verdict)
+        result = {
+            "initial": initial,
+            "final": final,
+            "passes": 1,
+            "target_qs": target_qs,
+            "history": history,
+            "report": report,
+        }
+        yield {"phase": "complete", "result": result}
+        return
 
     passes = 0
     stall = 0
@@ -241,6 +364,7 @@ def enhance_image_stream(
             best = candidate.copy()
             best_qs = cand_qs
             best_metrics = cand_metrics
+            verdict = f"iterative_pass_{passes}"
 
         history.append(
             {
@@ -284,6 +408,7 @@ def enhance_image_stream(
                 best = trial
                 best_qs = tq
                 best_metrics = compute_qs_post_bgr(best)
+                verdict = f"polish_clip_{clip}"
             yield {
                 "phase": "polish_pass",
                 "clip": clip,
@@ -300,6 +425,7 @@ def enhance_image_stream(
             if improved:
                 best = trial_img.copy()
                 best_qs = tq
+                verdict = f"escalation:{label}"
             yield {
                 "phase": "escalation_try",
                 "label": label,
@@ -323,13 +449,17 @@ def enhance_image_stream(
     if qf < qs_orig_lenient:
         shutil.copyfile(input_path, output_path)
         final = compute_qs_post(output_path)
+        verdict = "rolled_back_to_original"
 
+    final_disk = cv2.imread(output_path)
+    report = _enhancement_report(original_disk, final_disk if final_disk is not None else best, verdict)
     result = {
         "initial": initial,
         "final": final,
         "passes": passes,
         "target_qs": target_qs,
         "history": history,
+        "report": report,
     }
     yield {"phase": "complete", "result": result}
 
